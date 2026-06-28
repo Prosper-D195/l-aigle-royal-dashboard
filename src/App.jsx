@@ -1,284 +1,406 @@
-import React, { useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { 
-  Leaf, 
-  Package, 
-  Plus, 
-  Minus, 
-  AlertTriangle, 
-  LogOut, 
-  User, 
-  FileText, 
-  Calendar,
-  CheckCircle,
-  TrendingUp
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState('agronomie');
-  
-  // États pour le Cahier de Culture
-  const [cultureReport, setCultureReport] = useState({
-    type: 'Suivi de parcelle',
-    observation: '',
-    date: new Date().toISOString().split('T')[0]
-  });
+function App() {
+  // Récupération dynamique de l'URL de l'API (Railway en production ou localhost en développement)
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-  // États fictifs pour les stocks (Papayes Calina IPB9 & Intrants)
-  const [stocks, setStocks] = useState([
-    { id: 1, name: 'Engrais Organique NPK', category: 'Intrant', quantity: 15, unit: 'Sacs', minLimit: 5 },
-    { id: 2, name: 'Caisses d\'emballage Export', category: 'Logistique', quantity: 120, unit: 'Unités', minLimit: 30 },
-    { id: 3, name: 'Produits de traitement bio', category: 'Phytosanitaire', quantity: 3, unit: 'Litres', minLimit: 5 }, // En alerte
-  ]);
+  // Gestion des onglets
+  const [activeTab, setActiveTab] = useState('posts');
 
-  // Gestion de l'ajustement rapide des stocks
-  const handleStockChange = (id, amount) => {
-    setStocks(prev => prev.map(item => {
-      if (item.id === id) {
-        const newQty = Math.max(0, item.quantity + amount);
-        return { ...item, quantity: newQty };
+  // États pour la Connexion / Authentification
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || null);
+  const [authError, setAuthError] = useState('');
+
+  // États pour la Gestion des Rapports / Posts
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [category, setCategory] = useState('GENERAL');
+  const [postMessage, setPostMessage] = useState({ text: '', isError: false });
+
+  // États pour la Gestion des Stocks
+  const [stocks, setStocks] = useState([]);
+  const [stockName, setStockName] = useState('');
+  const [stockQuantity, setStockQuantity] = useState('');
+  const [stockUnit, setStockUnit] = useState('kg');
+  const [stockMinQuantity, setStockMinQuantity] = useState('0');
+  const [stockCategory, setStockCategory] = useState('SEMENCE');
+  const [stockMessage, setStockMessage] = useState({ text: '', isError: false });
+
+  // Charger les stocks
+  useEffect(() => {
+    if (token) {
+      fetchStocks();
+    }
+  }, [token]);
+
+  const fetchStocks = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/stock`);
+      if (response.ok) {
+        const data = await response.json();
+        setStocks(data);
       }
-      return item;
-    }));
+    } catch (err) {
+      console.error("Erreur lors de la récupération des stocks:", err);
+    }
   };
 
-  const handleReportSubmit = (e) => {
+  // Gestion du Login
+  const handleLogin = async (e) => {
     e.preventDefault();
-    alert(`Rapport enregistré avec succès pour la catégorie : ${cultureReport.type}`);
-    setCultureReport({ ...cultureReport, observation: '' });
+    setAuthError('');
+    try {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || 'Erreur de connexion');
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+    } catch (err) {
+      setAuthError(err.message);
+    }
   };
 
-  return (
-    <div className="relative min-h-screen text-slate-800 font-sans antialiased">
-      {/* 📸 IMAGE D'ARRIÈRE-PLAN : Remplacement de la vidéo par la photo de papaye */}
-      <img 
-        src="/papaye.jpg" 
-        alt="Papayes Calina IPB9 L'AIGLE ROYAL" 
-        className="fixed inset-0 w-full h-full object-cover -z-20"
-      />
-      
-      {/* Voile translucide pour garantir la lisibilité et l'effet de luxe */}
-      <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm -z-10" />
+  // Déconnexion
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setToken('');
+    setUser(null);
+  };
 
-      {/* 🦅 BARRE DE NAVIGATION SUPÉRIEURE */}
-      <header className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-orange-100 px-6 py-4 flex justify-between items-center z-50 shadow-sm">
+  // Envoi d'un Rapport Technique
+  const handleSubmitPost = async (e) => {
+    e.preventDefault();
+    setPostMessage({ text: '', isError: false });
+
+    try {
+      const response = await fetch(`${API_URL}/api/posts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token,
+        },
+        body: JSON.stringify({ title, content, category }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "Erreur lors de la création");
+
+      setPostMessage({ text: "🦅 Note technique publiée avec succès sur le site public !", isError: false });
+      setTitle('');
+      setContent('');
+      setCategory('GENERAL');
+    } catch (err) {
+      setPostMessage({ text: `Erreur : ${err.message}`, isError: true });
+    }
+  };
+
+  // Envoi d'un Nouvel Article en Stock
+  const handleSubmitStock = async (e) => {
+    e.preventDefault();
+    setStockMessage({ text: '', isError: false });
+
+    try {
+      const response = await fetch(`${API_URL}/api/stock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token,
+        },
+        body: JSON.stringify({
+          name: stockName,
+          quantity: parseFloat(stockQuantity),
+          unit: stockUnit,
+          minQuantity: parseFloat(stockMinQuantity),
+          category: stockCategory
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "Erreur lors de l'ajout au stock");
+
+      setStockMessage({ text: "📦 Article ajouté à l'inventaire avec succès !", isError: false });
+      setStockName('');
+      setStockQuantity('');
+      setStockMinQuantity('0');
+      fetchStocks();
+    } catch (err) {
+      setStockMessage({ text: `Erreur : ${err.message}`, isError: true });
+    }
+  };
+
+  // Ajuster rapidement une quantité
+  const handleAdjustQuantity = async (id, currentQty, amount) => {
+    const newQty = Math.max(0, currentQty + amount);
+    try {
+      const response = await fetch(`${API_URL}/api/stock/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token,
+        },
+        body: JSON.stringify({ quantity: newQty }),
+      });
+      if (response.ok) fetchStocks();
+    } catch (err) {
+      console.error("Erreur de mise à jour du stock :", err);
+    }
+  };
+
+  // 📸 NOUVEAU COMPOSANT ARRIÈRE-PLAN : Remplacement de la vidéo par la photo de papaye
+  const BackgroundImage = () => (
+    <div className="fixed inset-0 -z-20 h-full w-full overflow-hidden bg-slate-900">
+      <img
+        src="/papaye.jpg"
+        alt="Papayes Calina IPB9 L'AIGLE ROYAL"
+        className="h-full w-full object-cover"
+      />
+      {/* Superposition dégradée orange/sombre translucide de prestige */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#9a3412]/85 via-[#ea580c]/75 to-slate-950/85 -z-10 bg-blend-multiply" />
+    </div>
+  );
+
+  // --- ÉCRAN DE CONNEXION ---
+  if (!token) {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center p-6 text-slate-800">
+        <BackgroundImage />
+        
+        <div className="max-w-md w-full bg-white/95 rounded-2xl shadow-2xl border border-orange-200/50 p-8 backdrop-blur-md">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-serif font-bold text-[#9a3412] tracking-wide">L'AIGLE ROYAL</h1>
+            <p className="text-xs uppercase tracking-widest text-slate-500 font-medium mt-2">Espace Administration</p>
+          </div>
+
+          {authError && (
+            <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl mb-4 text-center">
+              {authError}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Email Exploitant</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412]" placeholder="agronome@aigleroyal.com" />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Mot de passe</label>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412]" placeholder="••••••••" />
+            </div>
+            <button type="submit" className="w-full bg-[#9a3412] hover:bg-[#7c2d12] text-white font-medium p-3 rounded-xl shadow-md transition duration-200 tracking-wide uppercase text-xs font-semibold">
+              Se connecter au Domaine
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // --- TABLEAU DE BORD PRINCIPAL ---
+  return (
+    <div className="relative min-h-screen text-slate-800 font-sans pb-12">
+      <BackgroundImage />
+      
+      {/* Top Header */}
+      <header className="bg-white/90 border-b border-orange-200/40 px-8 py-5 flex justify-between items-center sticky top-0 z-10 shadow-sm backdrop-blur-md">
         <div className="flex items-center space-x-3">
           <span className="text-2xl">🦅</span>
           <div>
-            <h1 className="text-xl font-bold tracking-wider text-amber-900">L'AIGLE ROYAL</h1>
-            <p className="text-xs font-semibold uppercase tracking-widest text-orange-600">Édition Prestige — Admin</p>
+            <h1 className="text-xl font-serif font-bold tracking-wide text-[#9a3412]">L'AIGLE ROYAL</h1>
+            <p className="text-[11px] uppercase tracking-widest text-slate-500 font-medium">
+              Exploitation Agricole de Prestige <span className="text-slate-400">| Admin : {user?.username}</span>
+            </p>
           </div>
         </div>
-        
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center space-x-2 text-sm text-stone-700 bg-stone-100 py-1.5 px-3 rounded-full font-medium">
-            <User size={16} className="text-orange-600" />
-            <span>Exploitant</span>
-          </div>
-          <button className="text-stone-500 hover:text-red-600 transition-colors flex items-center space-x-1 text-sm font-medium">
-            <LogOut size={16} />
-            <span className="hidden sm:inline">Déconnexion</span>
-          </button>
-        </div>
+        <button onClick={handleLogout} className="bg-white/80 hover:bg-red-50 text-slate-600 hover:text-red-600 text-xs font-medium px-4 py-2 rounded-xl border border-slate-200 transition duration-200 shadow-sm">
+          Déconnexion
+        </button>
       </header>
 
-      {/* CONTENU PRINCIPAL */}
-      <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="max-w-6xl mx-auto p-8">
         
-        {/* EN-TÊTE DU PANNEAU DE CONTRÔLE */}
-        <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/70 backdrop-blur-md rounded-2xl p-6 border border-white/50 shadow-lg gap-4">
-          <div>
-            <h2 className="text-2xl font-extrabold text-stone-900">Tableau de bord agronomique</h2>
-            <p className="text-stone-600 mt-1">Supervision de l'exploitation et du verger de 1 250 Papayers Calina IPB9</p>
-          </div>
-          
-          {/* SÉLECTEUR D'ONGLETS SANS RECHARGEMENT */}
-          <div className="flex bg-stone-200/80 p-1 rounded-xl w-full sm:w-auto">
-            <button 
-              onClick={() => setActiveTab('agronomie')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'agronomie' ? 'bg-white text-orange-700 shadow-sm' : 'text-stone-600 hover:text-stone-900'}`}
-            >
-              <Leaf size={16} />
-              <span>Suivi Culture</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('stocks')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'stocks' ? 'bg-white text-orange-700 shadow-sm' : 'text-stone-600 hover:text-stone-900'}`}
-            >
-              <Package size={16} />
-              <span>Stocks & Intrants</span>
-            </button>
-          </div>
+        {/* Navigation - Onglets */}
+        <div className="flex space-x-2 mb-8 bg-white/80 p-1.5 rounded-xl w-fit border border-orange-200/30 shadow-md backdrop-blur-sm">
+          <button onClick={() => setActiveTab('posts')} className={`px-6 py-2.5 rounded-lg text-xs uppercase tracking-wider font-semibold transition duration-200 ${activeTab === 'posts' ? 'bg-[#9a3412] text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+            📝 Notes de Culture
+          </button>
+          <button onClick={() => setActiveTab('stock')} className={`px-6 py-2.5 rounded-lg text-xs uppercase tracking-wider font-semibold transition duration-200 ${activeTab === 'stock' ? 'bg-[#9a3412] text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+            📦 Intrants & Stocks
+          </button>
         </div>
 
-        {/* CONTENU DE L'ONGLET : SUIVI AGRONOMIQUE */}
-        {activeTab === 'agronomie' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Formulaire de consignation */}
-            <div className="lg:col-span-1 bg-white/95 backdrop-blur-md rounded-2xl p-6 shadow-xl border border-white flex flex-col justify-between">
-              <div>
-                <div className="flex items-center space-x-2 pb-4 mb-4 border-b border-stone-100">
-                  <FileText className="text-orange-600" size={20} />
-                  <h3 className="text-lg font-bold text-stone-900">Nouvelle Note Technique</h3>
+        {/* --- ONGLET 1 : RAPPORTS TECHNIQUES --- */}
+        {activeTab === 'posts' && (
+          <div className="bg-white/95 border border-orange-200/40 rounded-2xl shadow-xl p-8 max-w-3xl backdrop-blur-sm">
+            <h2 className="text-xl font-serif font-bold text-slate-800 mb-1">Cahier de Suivi Agronomique</h2>
+            <p className="text-xs text-slate-500 mb-6">Consignez vos données d'évolution pour le verger de papayers Calina IPB9.</p>
+
+            {postMessage.text && (
+              <div className={`p-4 rounded-xl mb-6 text-sm border ${postMessage.isError ? 'bg-red-50 border-red-200 text-red-600' : 'bg-orange-50 border-orange-200 text-orange-800'}`}>
+                {postMessage.text}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitPost} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="md:col-span-2">
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Titre du Rapport</label>
+                  <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412] focus:ring-1 focus:ring-[#9a3412] transition" placeholder="Ex: Ajustement de l'irrigation" />
                 </div>
-                
-                <form onSubmit={handleReportSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Secteur / Catégorie</label>
+                  <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412] h-[46px] cursor-pointer">
+                    <option value="GENERAL">📊 Général</option>
+                    <option value="SUIVI_PARCELLE">🌱 Suivi Parcelle</option>
+                    <option value="PHYTOSANITAIRE">🛡️ Phytosanitaire</option>
+                    <option value="IRRIGATION">💧 Irrigation</option>
+                    <option value="RECOLTE_RENDEMENT">🧺 Récolte & Rendement</option>
+                    <option value="AGROBUSINESS">💼 Agrobusiness</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Observations Techniques</label>
+                <textarea value={content} onChange={(e) => setContent(e.target.value)} required rows="6" className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412] focus:ring-1 focus:ring-[#9a3412] transition" placeholder="Saisissez vos relevés d'arrosage, traitements..."></textarea>
+              </div>
+
+              <button type="submit" className="bg-[#9a3412] hover:bg-[#7c2d12] text-white font-medium px-6 py-3 rounded-xl shadow-md transition duration-150 tracking-wide uppercase text-xs font-semibold">
+                🚀 Diffuser la Note Technique
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* --- ONGLET 2 : INVENTAIRE & STOCKS --- */}
+        {activeTab === 'stock' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Formulaire d'ajout */}
+            <div className="bg-white/95 border border-orange-200/40 rounded-2xl shadow-xl p-6 h-fit backdrop-blur-sm">
+              <h2 className="text-lg font-serif font-bold text-slate-800 mb-1">Mouvement de Stock</h2>
+              <p className="text-xs text-slate-500 mb-6">Enregistrer un nouvel intrant noble.</p>
+
+              {stockMessage.text && (
+                <div className={`p-3 rounded-xl mb-4 text-xs border ${stockMessage.isError ? 'bg-red-50 border-red-200 text-red-600' : 'bg-orange-50 border-orange-200 text-orange-800'}`}>
+                  {stockMessage.text}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitStock} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Désignation</label>
+                  <input type="text" value={stockName} onChange={(e) => setStockName(e.target.value)} required className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412]" placeholder="Ex: Engrais Organique NPK" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 mb-2">Type d'intervention</label>
-                    <select 
-                      value={cultureReport.type}
-                      onChange={(e) => setCultureReport({...cultureReport, type: e.target.value})}
-                      className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium"
-                    >
-                      <option>Suivi de parcelle</option>
-                      <option>Traitement Phytosanitaire</option>
-                      <option>Irrigation & Fertilisation</option>
-                      <option>Rendement & Récolte</option>
+                    <label className="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Quantité</label>
+                    <input type="number" step="any" value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value)} required className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412]" placeholder="100" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Unité</label>
+                    <select value={stockUnit} onChange={(e) => setStockUnit(e.target.value)} className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412] h-[42px]">
+                      <option value="kg">Kilogrammes (kg)</option>
+                      <option value="litres">Litres (L)</option>
+                      <option value="sacs">Sacs</option>
+                      <option value="unités">Unités</option>
                     </select>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 mb-2">Date du relevé</label>
-                    <input 
-                      type="date"
-                      value={cultureReport.date}
-                      onChange={(e) => setCultureReport({...cultureReport, date: e.target.value})}
-                      className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 mb-2">Observations agronomiques</label>
-                    <textarea 
-                      rows="4"
-                      value={cultureReport.observation}
-                      onChange={(e) => setCultureReport({...cultureReport, observation: e.target.value})}
-                      placeholder="Décrivez l'état végétatif des papayers, l'avancement de la floraison ou les actions menées..."
-                      className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium placeholder-stone-400"
-                      required
-                    ></textarea>
-                  </div>
-
-                  <button 
-                    type="submit" 
-                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2 mt-2"
-                  >
-                    <CheckCircle size={18} />
-                    <span>Diffuser le rapport</span>
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            {/* Historique ou graphiques */}
-            <div className="lg:col-span-2 bg-white/95 backdrop-blur-md rounded-2xl p-6 shadow-xl border border-white">
-              <div className="flex items-center justify-between pb-4 mb-4 border-b border-stone-100">
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="text-orange-600" size={20} />
-                  <h3 className="text-lg font-bold text-stone-900">Courbe de suivi d'activité</h3>
                 </div>
-                <span className="text-xs font-bold px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full">Temps Réel</span>
-              </div>
-              <div className="h-64 sm:h-80 w-full mt-6">
-                <p className="text-sm text-stone-500 mb-4 font-medium">Visualisation de la régularité des relevés de culture (Données de simulation) :</p>
-                <ResponsiveContainer width="100%" height="85%">
-                  <AreaChart data={[
-                    { name: 'Lun', rapports: 2 },
-                    { name: 'Mar', rapports: 1 },
-                    { name: 'Mer', rapports: 4 },
-                    { name: 'Jeu', rapports: 2 },
-                    { name: 'Ven', rapports: 3 },
-                    { name: 'Sam', rapports: 5 },
-                    { name: 'Dim', rapports: 1 }
-                  ]}>
-                    <defs>
-                      <linearGradient id="colorReports" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ea580c" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#ea580c" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" stroke="#78716c" fontSize={12} tickLine={false} />
-                    <YAxis stroke="#78716c" fontSize={12} tickLine={false} />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="rapports" stroke="#ea580c" strokeWidth={2} fillOpacity={1} fill="url(#colorReports)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* CONTENU DE L'ONGLET : GESTION DES STOCKS */}
-        {activeTab === 'stocks' && (
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl p-6 shadow-xl border border-white">
-            <div className="flex items-center justify-between pb-4 mb-6 border-b border-stone-100">
-              <div className="flex items-center space-x-2">
-                <Package className="text-orange-600" size={20} />
-                <h3 className="text-lg font-bold text-stone-900">Inventaire et Matériel Critique</h3>
-              </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Seuil Alerte</label>
+                    <input type="number" step="any" value={stockMinQuantity} onChange={(e) => setStockMinQuantity(e.target.value)} className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412]" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Typologie</label>
+                    <select value={stockCategory} onChange={(e) => setStockCategory(e.target.value)} className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 focus:outline-none focus:border-[#9a3412] h-[42px]">
+                      <option value="SEMENCE">🌱 Semence</option>
+                      <option value="ENGRAIS">🧪 Engrais</option>
+                      <option value="PHYTOSANITAIRE">🛡️ Phytosanitaire</option>
+                      <option value="IRRIGATION">💧 Irrigation</option>
+                      <option value="OUTILLAGE">🛠️ Outillage</option>
+                      <option value="AUTRE">📦 Autre</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button type="submit" className="w-full bg-[#9a3412] hover:bg-[#7c2d12] text-white font-medium p-2.5 rounded-xl text-xs uppercase tracking-wider transition font-semibold shadow-sm mt-2">
+                  Inscrire à l'inventaire
+                </button>
+              </form>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-stone-200 text-stone-500 text-xs font-bold uppercase tracking-wider">
-                    <th className="pb-4">Nom de la ressource</th>
-                    <th className="pb-4">Catégorie</th>
-                    <th className="pb-4 text-center">Quantité actuelle</th>
-                    <th className="pb-4">Statut / Alertes</th>
-                    <th className="pb-4 text-right">Actions rapides</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100 text-sm font-medium">
-                  {stocks.map(item => {
-                    const isLow = item.quantity <= item.minLimit;
-                    return (
-                      <tr key={item.id} className="hover:bg-stone-50/50 transition-colors">
-                        <td className="py-4 font-bold text-stone-900">{item.name}</td>
-                        <td className="py-4 text-stone-600">{item.category}</td>
-                        <td className="py-4 text-center font-mono text-base font-bold text-stone-800">
-                          {item.quantity} <span className="text-xs text-stone-500 font-sans font-medium">{item.unit}</span>
-                        </td>
-                        <td className="py-4">
-                          {isLow ? (
-                            <span className="inline-flex items-center space-x-1 px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-200">
-                              <AlertTriangle size={12} />
-                              <span>Seuil critique dépassé</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center space-x-1 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100">
-                              <span>Stock optimal</span>
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-4 text-right">
-                          <div className="inline-flex items-center space-x-2 bg-stone-100 p-1 rounded-lg">
-                            <button 
-                              onClick={() => handleStockChange(item.id, -1)}
-                              className="p-1.5 bg-white text-stone-700 rounded-md hover:bg-orange-50 hover:text-orange-700 transition-colors shadow-sm"
-                              title="Diminuer de 1"
-                            >
-                              <Minus size={14} />
-                            </button>
-                            <button 
-                              onClick={() => handleStockChange(item.id, 1)}
-                              className="p-1.5 bg-white text-stone-700 rounded-md hover:bg-orange-50 hover:text-orange-700 transition-colors shadow-sm"
-                              title="Augmenter de 1"
-                            >
-                              <Plus size={14} />
-                            </button>
-                          </div>
-                        </td>
+            {/* Tableau d'affichage */}
+            <div className="bg-white/95 border border-orange-200/40 rounded-2xl shadow-xl p-6 lg:col-span-2 backdrop-blur-sm">
+              <h2 className="text-lg font-serif font-bold text-slate-800 mb-1">État des Réserves</h2>
+              <p className="text-xs text-slate-500 mb-6">Aperçu en temps réel des intrants.</p>
+
+              {stocks.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-sm border border-dashed border-slate-200 rounded-xl bg-slate-50">
+                  Aucun intrant inscrit pour le moment.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        <th className="pb-3">Désignation</th>
+                        <th className="pb-3">Type</th>
+                        <th className="pb-3 text-center">Volume</th>
+                        <th className="pb-3 text-right">Ajustement</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="text-sm divide-y divide-slate-100">
+                      {stocks.map((item) => {
+                        const isCritical = item.quantity <= item.minQuantity;
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/60 transition">
+                            <td className="py-3.5 font-medium text-slate-800">
+                              {item.name}
+                              {isCritical && (
+                                <span className="ml-2 inline-block bg-orange-100 text-[#9a3412] text-[9px] font-bold px-2 py-0.5 rounded border border-orange-200 uppercase tracking-wider">
+                                  ⚠️ Réappro
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 text-xs text-slate-500">{item.category}</td>
+                            <td className="py-3.5 text-center font-bold">
+                              <span className={isCritical ? 'text-red-600' : 'text-[#9a3412]'}>
+                                {item.quantity} {item.unit}
+                              </span>
+                            </td>
+                            <td className="py-3.5 text-right space-x-1">
+                              <button onClick={() => handleAdjustQuantity(item.id, item.quantity, -1)} className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold transition">-</button>
+                              <button onClick={() => handleAdjustQuantity(item.id, item.quantity, 1)} className="bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#9a3412] px-2.5 py-1 rounded-lg text-xs font-bold transition">+</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
+
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
+
+export default App;

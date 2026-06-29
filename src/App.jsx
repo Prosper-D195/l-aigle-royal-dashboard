@@ -20,6 +20,7 @@ function App() {
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('GENERAL');
   const [postMessage, setPostMessage] = useState({ text: '', isError: false });
+  const [dashboardPosts, setDashboardPosts] = useState([]); // 👈 Ajout : État pour l'historique des notes
 
   // États pour la Gestion des Stocks
   const [stocks, setStocks] = useState([]);
@@ -30,12 +31,27 @@ function App() {
   const [stockCategory, setStockCategory] = useState('SEMENCE');
   const [stockMessage, setStockMessage] = useState({ text: '', isError: false });
 
-  // Charger les stocks dès que l'utilisateur possède un jeton valide
+  // Charger les données de l'exploitation dès que l'utilisateur possède un jeton valide
   useEffect(() => {
     if (token) {
       fetchStocks();
+      fetchDashboardPosts(); // 👈 Ajout : Récupération des notes au démarrage
     }
   }, [token]);
+
+  // Récupération sécurisée anti-cache des notes techniques
+  const fetchDashboardPosts = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/posts?_t=${new Date().getTime()}`);
+      if (response.ok) {
+        const data = await response.json();
+        const actualPosts = Array.isArray(data) ? data : (data.posts || data.data || []);
+        setDashboardPosts(actualPosts);
+      }
+    } catch (err) {
+      console.error("Erreur lors de la récupération des notes sur le dashboard:", err);
+    }
+  };
 
   // Récupération sécurisée anti-cache des intrants
   const fetchStocks = async () => {
@@ -105,6 +121,7 @@ function App() {
       setTitle('');
       setContent('');
       setCategory('GENERAL');
+      fetchDashboardPosts(); // 👈 Ajout : Force la mise à jour immédiate de la liste sur le tableau de bord
     } catch (err) {
       setPostMessage({ text: `Erreur : ${err.message}`, isError: true });
     }
@@ -245,22 +262,25 @@ function App() {
 
         {/* --- SECTION : SUIVI AGRONOMIQUE (POSTS) --- */}
         {activeTab === 'posts' && (
-          <div className="bg-white/95 border border-emerald-200/40 rounded-2xl shadow-xl p-8 max-w-3xl backdrop-blur-sm">
-            <h2 className="text-xl font-serif font-bold text-slate-800 mb-1">Cahier de Suivi Agronomique</h2>
-            <p className="text-xs text-slate-500 mb-6">Consignez vos données d'évolution pour le verger de papayers Calina IPB9.</p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Formulaire de publication */}
+            <div className="bg-white/95 border border-emerald-200/40 rounded-2xl shadow-xl p-6 h-fit backdrop-blur-sm">
+              <h2 className="text-xl font-serif font-bold text-slate-800 mb-1">Cahier de Suivi</h2>
+              <p className="text-xs text-slate-500 mb-6">Consignez vos données d'évolution pour le verger de papayers Calina IPB9.</p>
 
-            {postMessage.text && (
-              <div className={`p-4 rounded-xl mb-6 text-sm border ${postMessage.isError ? 'bg-red-50 border-red-200 text-red-600' : 'bg-emerald-50 border-emerald-200 text-emerald-900'}`}>
-                {postMessage.text}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmitPost} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="md:col-span-2">
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Titre du Rapport</label>
-                  <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#1e3a1e] focus:ring-1 focus:ring-[#1e3a1e] transition" placeholder="Ex: Ajustement du calendrier hydrique" />
+              {postMessage.text && (
+                <div className={`p-4 rounded-xl mb-6 text-sm border ${postMessage.isError ? 'bg-red-50 border-red-200 text-red-600' : 'bg-emerald-50 border-emerald-200 text-emerald-900'}`}>
+                  {postMessage.text}
                 </div>
+              )}
+
+              <form onSubmit={handleSubmitPost} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Titre du Rapport</label>
+                  <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#1e3a1e] transition" placeholder="Ex: Ajustement de l'irrigation" />
+                </div>
+                
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Secteur / Catégorie</label>
                   <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#1e3a1e] h-[46px] cursor-pointer">
@@ -272,17 +292,47 @@ function App() {
                     <option value="AGROBUSINESS">💼 Agrobusiness</option>
                   </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Observations Techniques</label>
-                <textarea value={content} onChange={(e) => setContent(e.target.value)} required rows="6" className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#1e3a1e] focus:ring-1 focus:ring-[#1e3a1e] transition" placeholder="Saisissez vos relevés d'arrosage, traitements, analyses de croissance..."></textarea>
-              </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Observations Techniques</label>
+                  <textarea value={content} onChange={(e) => setContent(e.target.value)} required rows="5" className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:border-[#1e3a1e] transition" placeholder="Saisissez vos relevés d'arrosage, traitements..."></textarea>
+                </div>
 
-              <button type="submit" className="bg-[#1e3a1e] hover:bg-[#112211] text-white font-medium px-6 py-3 rounded-xl shadow-md transition duration-150 tracking-wide uppercase text-xs font-semibold">
-                🚀 Diffuser la Note Technique
-              </button>
-            </form>
+                <button type="submit" className="w-full bg-[#1e3a1e] hover:bg-[#112211] text-white font-medium p-3 rounded-xl shadow-md transition duration-150 tracking-wide uppercase text-xs font-semibold">
+                  🚀 Diffuser la Note Technique
+                </button>
+              </form>
+            </div>
+
+            {/* Liste de suivi en temps réel */}
+            <div className="bg-white/95 border border-emerald-200/40 rounded-2xl shadow-xl p-6 lg:col-span-2 backdrop-blur-sm">
+              <h2 className="text-lg font-serif font-bold text-slate-800 mb-1">Dernières Publications</h2>
+              <p className="text-xs text-slate-500 mb-6">Historique des notes diffusées sur le Domaine.</p>
+
+              {dashboardPosts.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-sm border border-dashed border-slate-200 rounded-xl bg-slate-50">
+                  Aucune note technique enregistrée pour le moment.
+                </div>
+              ) : (
+                <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
+                  {dashboardPosts.map((post) => (
+                    <div key={post.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition duration-150">
+                      <div className="flex justify-between items-start gap-4 mb-2">
+                        <h3 className="font-bold text-sm text-slate-800">{post.title}</h3>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded font-medium uppercase tracking-wider whitespace-nowrap">
+                          {post.category?.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 line-clamp-3 mb-3 whitespace-pre-line">{post.content}</p>
+                      <div className="text-[10px] text-slate-400 font-medium">
+                        Publié le : {new Date(post.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
